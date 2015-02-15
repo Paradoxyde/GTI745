@@ -20,12 +20,18 @@ import javax.swing.BoxLayout;
 
 // This stores a polygonal line, creating by a stroke of the user's finger or pen.
 class Stroke {
+    
+        public Stroke(float t)
+        {
+            this.tickness = t;
+        }
 	// the points that make up the stroke, in world space coordinates
 	private ArrayList< Point2D > points = new ArrayList< Point2D >();
 
 	private float color_red = 0;
 	private float color_green = 0;
 	private float color_blue = 0;
+        private float tickness = 1;
 
 	private AlignedRectangle2D boundingRectangle = new AlignedRectangle2D();
 	private boolean isBoundingRectangleDirty = false;
@@ -70,6 +76,7 @@ class Stroke {
 	}
 
 	public void draw( GraphicsWrapper gw ) {
+                gw.setLineWidth(tickness);
 		gw.setColor( color_red, color_green, color_blue );
 		gw.drawPolyline( points );
 	}
@@ -106,7 +113,8 @@ class Drawing {
 	}
 
 	public void draw( GraphicsWrapper gw ) {
-		gw.setLineWidth( 5 );
+		//gw.setLineWidth( 5 );
+                
 		for ( Stroke s : strokes ) {
 			s.draw( gw );
 		}
@@ -371,6 +379,8 @@ class Palette {
 	public int customColorRed_buttonIndex;
 	public int customColorGreen_buttonIndex;
 	public int customColorBlue_buttonIndex;
+        public int customThickness_buttonIndex;
+        public int customApply_buttonIndex;
 
 
 	public int currentlyActiveModalButton; // could be equal to any of ink_buttonIndex, select_buttonIndex, manipulate_buttonIndex, camera_buttonIndex
@@ -379,6 +389,7 @@ class Palette {
 	public float current_red = 0;
 	public float current_green = 0;
 	public float current_blue = 0;
+        public float current_tickness = 1;
 
 	public Palette() {
 		final int W = Constant.BUTTON_WIDTH;
@@ -452,6 +463,15 @@ class Palette {
                 b.height = H * 2 / 3;
                 b.width = W * 2;
 		customColorBlue_buttonIndex = buttons.size();
+		buttons.add( b );
+                
+                b = new PaletteButton( 7*W, H, "Apply", "", false );
+		customApply_buttonIndex = buttons.size();
+		buttons.add( b );
+                
+                b = new PaletteButton( 0, H * 2, "1 pixel", "", false );
+                b.width = W * 2;
+		customThickness_buttonIndex = buttons.size();
 		buttons.add( b );
 
 
@@ -733,6 +753,22 @@ class UserContext {
 						cursor = cursorContainer.getCursorByIndex( cursorIndex );
 						cursor.setType( MyCursor.TYPE_INTERACTING_WITH_WIDGET, indexOfButton );
 					}
+                                        else if ( indexOfButton == palette.customThickness_buttonIndex ) {
+						// We transition to the color corresponding to the button
+						palette.buttons.get( palette.currentlyActiveColorButton ).isPressed = false;
+                                                PaletteButton button = palette.buttons.get( indexOfButton );
+						button.isPressed = true;
+                                                
+                                                palette.current_tickness = (int)((x - button.x0 - palette.x0) / button.width * 5 + 1);
+                                                if (palette.current_tickness < 1) palette.current_tickness = 1;
+                                                if (palette.current_tickness > 6.0f) palette.current_tickness = 6.0f;
+                                                button.label = (int)(palette.current_tickness) + " pixel";
+                                                
+						// Cause a new cursor to be created to keep track of this event id in the future
+						cursorIndex = cursorContainer.updateCursorById( id, x, y );
+						cursor = cursorContainer.getCursorByIndex( cursorIndex );
+						cursor.setType( MyCursor.TYPE_INTERACTING_WITH_WIDGET, indexOfButton );
+                                        }
 					else if ( indexOfButton == palette.horizFlip_buttonIndex ) {
 						palette.buttons.get( indexOfButton ).isPressed = true;
 
@@ -768,6 +804,19 @@ class UserContext {
 							s.markBoundingRectangleDirty();
 						}
 						drawing.markBoundingRectangleDirty();
+					}
+                                        else if ( indexOfButton == palette.customApply_buttonIndex ) {
+						palette.buttons.get( indexOfButton ).isPressed = true;
+
+						// Cause a new cursor to be created to keep track of this event id in the future
+						cursorIndex = cursorContainer.updateCursorById( id, x, y );
+						cursor = cursorContainer.getCursorByIndex( cursorIndex );
+						cursor.setType( MyCursor.TYPE_INTERACTING_WITH_WIDGET, indexOfButton );
+
+						// Flip the selected strokes horizontally (around a vertical axis)
+						for ( Stroke s : selectedStrokes ) {
+                                                    s.setColor(palette.current_red, palette.current_green, palette.current_blue);
+						}
 					}
 					else if ( indexOfButton == palette.frameAll_buttonIndex ) {
 						palette.buttons.get( indexOfButton ).isPressed = true;
@@ -940,6 +989,22 @@ class UserContext {
 						cursor = cursorContainer.getCursorByIndex( cursorIndex );
 						cursor.setType( MyCursor.TYPE_INTERACTING_WITH_WIDGET, cursor.indexOfButton );
 					}
+                                        else if ( cursor.indexOfButton == palette.customThickness_buttonIndex ) {
+						// We transition to the color corresponding to the button
+						palette.buttons.get( palette.currentlyActiveColorButton ).isPressed = false;
+                                                PaletteButton button = palette.buttons.get( cursor.indexOfButton );
+						button.isPressed = true;
+                                                
+                                                palette.current_tickness = (int)((x - button.x0 - palette.x0) / button.width * 5 + 1);
+                                                if (palette.current_tickness < 1) palette.current_tickness = 1;
+                                                if (palette.current_tickness > 6.0f) palette.current_tickness = 6.0f;
+                                                button.label = (int)(palette.current_tickness) + " pixel";
+                                                
+						// Cause a new cursor to be created to keep track of this event id in the future
+						cursorIndex = cursorContainer.updateCursorById( id, x, y );
+						cursor = cursorContainer.getCursorByIndex( cursorIndex );
+						cursor.setType( MyCursor.TYPE_INTERACTING_WITH_WIDGET, cursor.indexOfButton );
+                                        }
 					cursorIndex = cursorContainer.updateCursorById( id, x, y );
 				}
 			}
@@ -949,7 +1014,7 @@ class UserContext {
 					cursorIndex = cursorContainer.updateCursorById( id, x, y );
 
 					// Add the newly drawn stroke to the drawing
-					Stroke newStroke = new Stroke();
+					Stroke newStroke = new Stroke(palette.current_tickness);
 					newStroke.setColor( palette.current_red, palette.current_green, palette.current_blue );
 					for ( Point2D p : cursor.getPositions() ) {
 						newStroke.addPoint( gw.convertPixelsToWorldSpaceUnits( p ) );
