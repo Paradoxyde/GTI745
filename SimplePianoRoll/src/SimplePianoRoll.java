@@ -43,6 +43,9 @@ import javax.sound.midi.Synthesizer;
 import javax.sound.midi.MidiChannel;
 import javax.swing.JFileChooser;
 import javax.sound.midi.*;
+import javax.swing.JSlider;
+import javax.swing.event.ChangeEvent;
+import javax.swing.event.ChangeListener;
 
 
 
@@ -614,7 +617,7 @@ class MyCanvas extends JPanel implements KeyListener, MouseListener, MouseMotion
 						}
 					}
 				}
-				thread.sleep( sleepIntervalInMilliseconds );  // interval given in milliseconds
+				thread.sleep( simplePianoRoll.tempoSlider.getValue() );  // interval given in milliseconds
 			}
 		}
 		catch (InterruptedException e) { }
@@ -622,8 +625,9 @@ class MyCanvas extends JPanel implements KeyListener, MouseListener, MouseMotion
 
 }
 
-public class SimplePianoRoll implements ActionListener {
+public class SimplePianoRoll implements ActionListener, ChangeListener, MouseListener {
 
+        Metronome metronome;
 	static final String applicationName = "Simple Piano Roll";
 
 	JFrame frame;
@@ -655,7 +659,8 @@ public class SimplePianoRoll implements ActionListener {
 	JRadioButton playNoteUponRolloverRadioButton;
 	JRadioButton playNoteUponRolloverIfSpecialKeyHeldDownRadioButton;
 
-        
+        JSlider tempoSlider; 
+        JLabel tempoLabel;
         
         public static final int NOTE_ON = 0x90;
         public static final int NOTE_OFF = 0x80;
@@ -1053,6 +1058,7 @@ public class SimplePianoRoll implements ActionListener {
 		toolPanel.setLayout( new BoxLayout( toolPanel, BoxLayout.Y_AXIS ) );
 
 		canvas = new MyCanvas(this);
+                metronome = new Metronome((this));
 
 		Container pane = frame.getContentPane();
 		pane.setLayout( new BoxLayout( pane, BoxLayout.X_AXIS ) );
@@ -1069,9 +1075,20 @@ public class SimplePianoRoll implements ActionListener {
 		loopWhenPlayingCheckBox.addActionListener(this);
 		toolPanel.add( loopWhenPlayingCheckBox );
 
+                
+                tempoSlider = new JSlider(JSlider.HORIZONTAL, 1, 1000, 150);
+		tempoSlider.setAlignmentX( Component.LEFT_ALIGNMENT );
+                tempoSlider.addChangeListener(this);
+                tempoSlider.addMouseListener(this);
+                toolPanel.add( tempoSlider );
+                tempoLabel = new JLabel("Tempo: 150");
+                toolPanel.add(tempoLabel);
+		tempoLabel.setAlignmentX( Component.LEFT_ALIGNMENT );
+                
 		toolPanel.add( Box.createRigidArea(new Dimension(1,20)) );
 		toolPanel.add( new JLabel("During dragging:") );
 
+                
 		ButtonGroup dragModeButtonGroup = new ButtonGroup();
 
 			drawNotesRadioButton = new JRadioButton( "Draw Notes" );
@@ -1133,5 +1150,39 @@ public class SimplePianoRoll implements ActionListener {
 			}
 		);
 	}
+
+    @Override
+    public void stateChanged(ChangeEvent e) {
+        if (e.getSource() == tempoSlider) {
+            metronome.setTempo(tempoSlider.getValue());
+            tempoLabel.setText("Tempo:" + tempoSlider.getValue());
+        }
+    }
+
+    @Override
+    public void mouseClicked(MouseEvent e) {
+    }
+
+    @Override
+    public void mousePressed(MouseEvent e) {
+        if (e.getSource() == tempoSlider) {
+            metronome.startBackgroundWork();
+        }
+    }
+
+    @Override
+    public void mouseReleased(MouseEvent e) {
+        if (e.getSource() == tempoSlider) {
+            metronome.stopBackgroundWork();
+        }
+    }
+
+    @Override
+    public void mouseEntered(MouseEvent e) {
+    }
+
+    @Override
+    public void mouseExited(MouseEvent e) {
+    }
 }
 
