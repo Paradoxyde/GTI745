@@ -80,7 +80,8 @@ class Score {
 	public int numPitches = 88;
 	public static final int pitchClassOfLowestPitch = 9; // 9==A==la
 	public static final int midiNoteNumberOfLowestPitch = 21;
-	public int numBeats = 128;
+	public int numBeats = 64;
+	public final int MAX_BEATS = 128;
 	public boolean [][] grid;
 
 	public static final int numPitchesInOctave = 12;
@@ -89,7 +90,7 @@ class Score {
 	public boolean [] pitchClassesToEmphasizeInMajorScale;
 
 	public Score() {
-		grid = new boolean[ numBeats ][ numPitches ];
+		grid = new boolean[ MAX_BEATS ][ numPitches ];
 
 		namesOfPitchClasses = new String[ numPitchesInOctave ];
 		namesOfPitchClasses[ 0] = "C";
@@ -133,23 +134,34 @@ class Score {
 		pitchClassesToEmphasizeInMajorScale[10] = false;
 		pitchClassesToEmphasizeInMajorScale[11] = false;
 	}
+        
+        public void setBeatCount(int count)
+        {
+            numBeats = count;
+        }
 
 	// returns -1 if out of bounds
 	public int getMidiNoteNumberForMouseY( GraphicsWrapper gw, int mouse_y ) {
 		float y = gw.convertPixelsToWorldSpaceUnitsY( mouse_y );
 		int indexOfPitch = (int)(-y);
-		if ( 0 <= indexOfPitch && indexOfPitch < numPitches )
-			return indexOfPitch + midiNoteNumberOfLowestPitch;
-		return -1;
+                if (indexOfPitch < 0)
+                    indexOfPitch = 0;
+                if (indexOfPitch >= numPitches)
+                    indexOfPitch = numPitches - 1;
+                
+                return indexOfPitch + midiNoteNumberOfLowestPitch;
 	}
 
 	// returns -1 if out of bounds
 	public int getBeatForMouseX( GraphicsWrapper gw, int mouse_x ) {
 		float x = gw.convertPixelsToWorldSpaceUnitsX( mouse_x );
 		int indexOfBeat = (int)x;
-		if ( 0 <= indexOfBeat && indexOfBeat < numBeats )
-			return indexOfBeat;
-		return -1;
+                if (indexOfBeat < 0)
+                    indexOfBeat = 0;
+                if (indexOfBeat >= numBeats)
+                    indexOfBeat = numBeats - 1;
+                
+                return indexOfBeat;
 	}
 
 	public void draw(
@@ -157,7 +169,8 @@ class Score {
 		boolean highlightMajorCScale,
 		int midiNoteNumber1ToHilite,
 		int beat1ToHilite,
-		int beat2ToHilite
+		int beat2ToHilite,
+                MyCanvas canvas
 	) {
 		for ( int y = 0; y < numPitches; y++ ) {
 			int pitchClass = ( y + pitchClassOfLowestPitch ) % numPitchesInOctave;
@@ -202,8 +215,23 @@ class Score {
 		gw.setColor( 0, 0, 0 );
 		for ( int y = 0; y < numPitches; ++y ) {
 			for ( int x = 0; x < numBeats; ++x ) {
-				if ( grid[x][y] )
-					gw.fillRect( x+0.3f, -y-0.7f, 0.4f, 0.4f );
+                            if (!canvas.selectionActive || x < canvas.selectionX || x > canvas.selectionX + canvas.selectionW || y < canvas.selectionY || y > canvas.selectionY + canvas.selectionH)
+                            {
+                                if ( grid[x][y] )
+                                {
+                                    gw.fillRect( x+0.3f, -y-0.7f, 0.4f, 0.4f );
+
+                                    if (x > 0 && grid[x-1][y])
+                                        gw.fillRect( x-0.3f, -y-0.7f, 0.6f, 0.4f );
+                                }
+                            }
+                            else
+                            {
+                                if ( canvas.selectionGrid[x - (int)canvas.selectionX][y - (int)canvas.selectionY] )
+                                {
+                                    gw.fillRect( x+0.3f, -y-0.7f, 0.4f, 0.4f );
+                                }
+                            }
 			}
 		}
 	}
@@ -273,6 +301,7 @@ class MyCanvas extends JPanel implements KeyListener, MouseListener, MouseMotion
 
 		gw.frame( score.getBoundingRectangle(), false );
 	}
+        
 	public Dimension getPreferredSize() {
 		return new Dimension( Constant.INITIAL_WINDOW_WIDTH, Constant.INITIAL_WINDOW_HEIGHT );
 	}
@@ -301,8 +330,30 @@ class MyCanvas extends JPanel implements KeyListener, MouseListener, MouseMotion
 			simplePianoRoll.highlightMajorScale,
 			midiNoteNumberOfMouseCurser,
 			beatOfMouseCursor,
-			currentBeat
+			currentBeat,
+                        this
 		);
+                
+                if (isRMBDown || selectionActive)
+                {
+                    float drawX = selectionX;
+                    float drawY = selectionY;
+                    float drawW = selectionW;
+                    float drawH = selectionH;
+                    
+                    if (drawW < 0)
+                    {
+                        drawX += drawW;
+                        drawW *= -1f;
+                    }
+                    if (drawH > 0)
+                    {
+                        drawY += drawH;
+                        drawH *= -1f;
+                    }
+                    gw.setColor( 0, 1, 0, 0.25f);
+                    gw.fillRect(drawX, -drawY - 1, drawW + 1, -drawH + 1);
+                }
 
 		gw.setCoordinateSystemToPixels();
 
@@ -343,6 +394,11 @@ class MyCanvas extends JPanel implements KeyListener, MouseListener, MouseMotion
 			)
 				playNote( midiNoteNumberOfMouseCurser );
 		}
+                
+                if (e.getKeyCode() == KeyEvent.VK_C && isControlKeyDown)
+                {
+                    duplicateSelection();
+                }
 	}
 	public void keyReleased( KeyEvent e ) {
 		if ( e.getKeyCode() == KeyEvent.VK_CONTROL ) {
@@ -385,14 +441,59 @@ class MyCanvas extends JPanel implements KeyListener, MouseListener, MouseMotion
 			}
 		}
 	}
+        
+        public boolean isLMBDown = false;
+        public boolean isRMBDown = false;
+        
+        public boolean selectionActive = false;
+        public boolean movingSelection = false;
+        public float selectionX;
+        public float selectionY;
+        public float selectionW;
+        public float selectionH;
+        
+	public boolean [][] selectionGrid;
+        
+        public void duplicateSelection()
+        {
+            for (int i = 0; i <= (int)selectionW; i++)
+            {
+                for (int j = 0; j <= (int)selectionH; j++)
+                {
+                    if (i + (int)selectionX >= 0 && i + (int)selectionX < score.MAX_BEATS && j + (int)selectionY >= 0 && j + (int)selectionY < score.grid[i + (int)selectionX].length)
+                        score.grid[i + (int)selectionX][j + (int)selectionY] = selectionGrid[i][j];
+                } 
+            }
+        }
 
 	public void mousePressed( MouseEvent e ) {
 		old_mouse_x = mouse_x;
 		old_mouse_y = mouse_y;
 		mouse_x = e.getX();
 		mouse_y = e.getY();
-
+                
 		isControlKeyDown = e.isControlDown();
+                
+                if (SwingUtilities.isLeftMouseButton(e))
+                    isLMBDown = true;
+                if (SwingUtilities.isRightMouseButton(e) && !e.isShiftDown())
+                {
+                    if (selectionActive)
+                    {
+                        selectionActive = false;
+                        duplicateSelection();
+                    }
+                    isRMBDown = true;
+                    selectionX = score.getBeatForMouseX( gw, mouse_x );
+                    selectionY = score.getMidiNoteNumberForMouseY( gw, mouse_y )-score.midiNoteNumberOfLowestPitch;
+                    selectionW = 0;
+                    selectionH = 0;
+                    repaint();
+                }
+                if (SwingUtilities.isRightMouseButton(e) && e.isShiftDown() && selectionActive)
+                {
+                    movingSelection = true;
+                }
 
 		if ( radialMenu.isVisible() || (SwingUtilities.isLeftMouseButton(e) && e.isControlDown()) ) {
 			int returnValue = radialMenu.pressEvent( mouse_x, mouse_y );
@@ -421,6 +522,49 @@ class MyCanvas extends JPanel implements KeyListener, MouseListener, MouseMotion
 
 		isControlKeyDown = e.isControlDown();
 
+                if (SwingUtilities.isLeftMouseButton(e))
+                    isLMBDown = false;
+                if (SwingUtilities.isRightMouseButton(e))
+                {
+                    isRMBDown = false;
+                    if (movingSelection)
+                        movingSelection = false;
+                    else
+                    {
+                        selectionW = score.getBeatForMouseX( gw, mouse_x ) - selectionX;
+                        selectionH = (score.getMidiNoteNumberForMouseY( gw, mouse_y ) - score.midiNoteNumberOfLowestPitch) - selectionY;
+                        if (selectionW < 0)
+                        {
+                            selectionX += selectionW;
+                            selectionW *= -1f;
+                        }
+                        if (selectionH < 0)
+                        {
+                            selectionY += selectionH;
+                            selectionH *= -1f;
+                        }
+
+                        if (selectionH > 0 || selectionW > 0)
+                            selectionActive = true;
+
+                        selectionGrid = new boolean[ (int)selectionW + 1 ][ (int)selectionH + 1 ];
+
+                        for (int i = 0; i <= (int)selectionW; i++)
+                        {
+                            for (int j = 0; j <= (int)selectionH; j++)
+                            {
+                                if (i + (int)selectionX >= 0 && i + (int)selectionX < score.MAX_BEATS && j + (int)selectionY >= 0 && j + (int)selectionY < score.grid[i + (int)selectionX].length)
+                                {
+                                    selectionGrid[i][j] = score.grid[i + (int)selectionX][j + (int)selectionY];
+                                    score.grid[i + (int)selectionX][j + (int)selectionY] = false;
+                                }
+                            } 
+                        }
+
+                        repaint();
+                    }
+                }
+                
 		if ( radialMenu.isVisible() ) {
 			int returnValue = radialMenu.releaseEvent( mouse_x, mouse_y );
 
@@ -528,6 +672,32 @@ class MyCanvas extends JPanel implements KeyListener, MouseListener, MouseMotion
 		int delta_y = mouse_y - old_mouse_y;
 
 		isControlKeyDown = e.isControlDown();
+                
+                if (isRMBDown)
+                {
+                    selectionW = score.getBeatForMouseX( gw, mouse_x ) - selectionX;
+                    selectionH = (score.getMidiNoteNumberForMouseY( gw, mouse_y ) - score.midiNoteNumberOfLowestPitch) - selectionY;
+                    repaint();
+                }
+                
+                if (movingSelection)
+                {
+                    float oldPosX = score.getBeatForMouseX( gw, old_mouse_x );
+                    float oldPosY = (score.getMidiNoteNumberForMouseY( gw, old_mouse_y));
+                    float posX = score.getBeatForMouseX( gw, mouse_x ) ;
+                    float posY = (score.getMidiNoteNumberForMouseY( gw, mouse_y ));
+                    
+                    if (oldPosX != posX)
+                    {
+                        selectionX += posX - oldPosX;
+                    }
+                    if (oldPosY != posY)
+                    {
+                        selectionY += posY - oldPosY;
+                    }
+                    
+                    repaint();
+                }
 
 		if ( radialMenu.isVisible() ) {
 			int returnValue = radialMenu.dragEvent( mouse_x, mouse_y );
@@ -560,7 +730,8 @@ class MyCanvas extends JPanel implements KeyListener, MouseListener, MouseMotion
 				repaint();
 			}
 		}
-		else {
+                else if (isLMBDown)
+                {
 			paint( mouse_x, mouse_y );
 		}
 	}
@@ -594,6 +765,7 @@ class MyCanvas extends JPanel implements KeyListener, MouseListener, MouseMotion
 					if ( Constant.USE_SOUND ) {
 						for ( int i = 0; i < score.numPitches; ++i ) {
 							if ( score.grid[currentBeat][i] )
+                                                            if (currentBeat == score.numBeats - 1 || !score.grid[currentBeat + 1][i])
 								simplePianoRoll.midiChannels[0].noteOff( i+score.midiNoteNumberOfLowestPitch );
 						}
 					}
@@ -603,6 +775,7 @@ class MyCanvas extends JPanel implements KeyListener, MouseListener, MouseMotion
 					if ( Constant.USE_SOUND ) {
 						for ( int i = 0; i < score.numPitches; ++i ) {
 							if ( score.grid[currentBeat][i] )
+                                                            if (currentBeat == 0 || !score.grid[currentBeat - 1][i])
 								simplePianoRoll.midiChannels[0].noteOn( i+score.midiNoteNumberOfLowestPitch, Constant.midiVolume );
 						}
 					}
@@ -661,6 +834,9 @@ public class SimplePianoRoll implements ActionListener, ChangeListener, MouseLis
 
         JSlider tempoSlider; 
         JLabel tempoLabel;
+        
+        JSlider beatsSlider; 
+        JLabel beatsLabel;
         
         public static final int NOTE_ON = 0x90;
         public static final int NOTE_OFF = 0x80;
@@ -1085,6 +1261,15 @@ public class SimplePianoRoll implements ActionListener, ChangeListener, MouseLis
                 toolPanel.add(tempoLabel);
 		tempoLabel.setAlignmentX( Component.LEFT_ALIGNMENT );
                 
+                beatsSlider = new JSlider(JSlider.HORIZONTAL, 4, canvas.score.MAX_BEATS, 64);
+		beatsSlider.setAlignmentX( Component.LEFT_ALIGNMENT );
+                beatsSlider.addChangeListener(this);
+                beatsSlider.addMouseListener(this);
+                toolPanel.add( beatsSlider );
+                tempoLabel = new JLabel("Beats: 64");
+                toolPanel.add(tempoLabel);
+		tempoLabel.setAlignmentX( Component.LEFT_ALIGNMENT );
+                
 		toolPanel.add( Box.createRigidArea(new Dimension(1,20)) );
 		toolPanel.add( new JLabel("During dragging:") );
 
@@ -1156,6 +1341,12 @@ public class SimplePianoRoll implements ActionListener, ChangeListener, MouseLis
         if (e.getSource() == tempoSlider) {
             metronome.setTempo(tempoSlider.getValue());
             tempoLabel.setText("Tempo:" + tempoSlider.getValue());
+        }
+        
+        if (e.getSource() == beatsSlider) {
+            canvas.score.setBeatCount(beatsSlider.getValue());
+            canvas.frameAll();
+            tempoLabel.setText("Beats:" + beatsSlider.getValue());
         }
     }
 
