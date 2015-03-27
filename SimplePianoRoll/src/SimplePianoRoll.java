@@ -16,6 +16,7 @@ import java.awt.event.MouseEvent;
 import java.awt.event.ActionListener;
 import java.awt.event.ActionEvent;
 import java.io.File;
+import java.io.FileFilter;
 import java.io.FileInputStream;
 import java.io.FileOutputStream;
 import java.io.ObjectInputStream;
@@ -938,7 +939,7 @@ public class SimplePianoRoll implements ActionListener, ChangeListener, MouseLis
                         int returnVal = fc.showSaveDialog(frame);
 
                         if (returnVal == JFileChooser.APPROVE_OPTION) {
-                            File file = fc.getSelectedFile();
+                            File file = new File(fc.getSelectedFile().getAbsolutePath() + ".mid");
                             try
                             {
 
@@ -1266,9 +1267,9 @@ public class SimplePianoRoll implements ActionListener, ChangeListener, MouseLis
                 beatsSlider.addChangeListener(this);
                 beatsSlider.addMouseListener(this);
                 toolPanel.add( beatsSlider );
-                tempoLabel = new JLabel("Beats: 64");
-                toolPanel.add(tempoLabel);
-		tempoLabel.setAlignmentX( Component.LEFT_ALIGNMENT );
+                beatsLabel = new JLabel("Beats: 64");
+                toolPanel.add(beatsLabel);
+		beatsLabel.setAlignmentX( Component.LEFT_ALIGNMENT );
                 
 		toolPanel.add( Box.createRigidArea(new Dimension(1,20)) );
 		toolPanel.add( new JLabel("During dragging:") );
@@ -1340,13 +1341,13 @@ public class SimplePianoRoll implements ActionListener, ChangeListener, MouseLis
     public void stateChanged(ChangeEvent e) {
         if (e.getSource() == tempoSlider) {
             metronome.setTempo(tempoSlider.getValue());
-            tempoLabel.setText("Tempo:" + tempoSlider.getValue());
+            tempoLabel.setText("Tempo: " + tempoSlider.getValue());
         }
         
         if (e.getSource() == beatsSlider) {
             canvas.score.setBeatCount(beatsSlider.getValue());
             canvas.frameAll();
-            tempoLabel.setText("Beats:" + beatsSlider.getValue());
+            beatsLabel.setText("Beats: " + beatsSlider.getValue());
         }
     }
 
