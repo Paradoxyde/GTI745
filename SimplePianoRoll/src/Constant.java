@@ -1,7 +1,7 @@
 
 public class Constant {
 	public static final int INITIAL_WINDOW_WIDTH = 1600;
-	public static final int INITIAL_WINDOW_HEIGHT = 1050;
+	public static final int INITIAL_WINDOW_HEIGHT = 1000;
 
 	public static final boolean BIG_TEXT_LABELS = false;
 
